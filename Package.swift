@@ -28,7 +28,11 @@ let package = Package(
         ),
         .testTarget(
             name: "OpenAPIMockTests",
-            dependencies: ["OpenAPIMock"]
+            dependencies: [
+                "OpenAPIMock",
+                .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
+            ],
+            resources: [.copy("MockResponses")]
         ),
     ]
 )
