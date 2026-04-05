@@ -22,6 +22,7 @@ public struct MockClientMiddleware: ClientMiddleware {
     private let simulatedLatency: Duration
     private let bundle: Bundle
     private let subdirectory: String?
+    private let verbose: Bool
 
     /// Creates a new ``MockClientMiddleware``.
     ///
@@ -30,16 +31,19 @@ public struct MockClientMiddleware: ClientMiddleware {
     ///   - simulatedLatency: Artificial delay before returning the mock response. Pass `.zero` in tests.
     ///   - bundle: The bundle to search for mock JSON files. Defaults to `Bundle.main`.
     ///   - subdirectory: The folder inside the bundle where mock files are located. Defaults to `MockResponses`.
+    ///   - verbose: When `false`, suppresses all console output. Defaults to `true`.
     public init(
         isEnabled: Bool,
         simulatedLatency: Duration = .milliseconds(800),
         bundle: Bundle = .main,
-        subdirectory: String? = "MockResponses"
+        subdirectory: String? = "MockResponses",
+        verbose: Bool = true
     ) {
         self.isEnabled = isEnabled
         self.simulatedLatency = simulatedLatency
         self.bundle = bundle
         self.subdirectory = subdirectory
+        self.verbose = verbose
     }
 
     public func intercept(
@@ -57,10 +61,13 @@ public struct MockClientMiddleware: ClientMiddleware {
             let fileURL = bundle.url(forResource: operationID, withExtension: "json", subdirectory: subdirectory),
             let data = try? Data(contentsOf: fileURL)
         else {
-            print("""
-                ⚠️ [OpenAPIMock] No mock found for '\(operationID)' — falling through to network.
-                   To capture this response, enable RecordingClientMiddleware and run the app once.
-                """)
+            if verbose {
+                let location = subdirectory.map { "'\($0)/'" } ?? "bundle root"
+                print("""
+                    ⚠️ [OpenAPIMock] No mock found for '\(operationID)' in \(location) — falling through to network.
+                       To capture this response, enable RecordingClientMiddleware and run the app once.
+                    """)
+            }
             return try await next(request, body, baseURL)
         }
 
@@ -68,6 +75,9 @@ public struct MockClientMiddleware: ClientMiddleware {
             try await Task.sleep(for: simulatedLatency)
         }
 
+        if verbose {
+            print("✅ [OpenAPIMock] Serving '\(operationID).json' from bundle")
+        }
         var response = HTTPResponse(status: .ok)
         response.headerFields[.contentType] = "application/json"
         return (response, HTTPBody(data))
